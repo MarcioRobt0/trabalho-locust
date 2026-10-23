@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Locust
+.locust/
+
+# Resultados grandes (manter apenas o resumo)
+results/csv/*.csv.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs temporários
+*.log
