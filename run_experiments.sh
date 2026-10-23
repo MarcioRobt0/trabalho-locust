@@ -69,6 +69,22 @@ for PROFILE in "${PROFILES[@]}"; do
       # Garante que não há CSV parcial de uma execução anterior interrompida
       rm -f "${OUTPUT}"_*.csv
 
+      # --- Coleta de CPU em background durante a execução ---
+      CPU_OUTPUT="${RESULTS_DIR}/docker_stats_${PROFILE}_${SCENARIO}_rep${i}.csv"
+      echo "name,cpu_pct,mem_usage,profile,scenario,rep,timestamp" > "$CPU_OUTPUT"
+      (
+        while true; do
+          docker stats --no-stream \
+            customers-service api-gateway vets-service visits-service \
+            --format "{{.Name}},{{.CPUPerc}},{{.MemUsage}}" \
+            2>/dev/null | while IFS= read -r line; do
+              echo "${line},${PROFILE},${SCENARIO},${i},$(date +%s)"
+            done
+          sleep 5
+        done
+      ) &
+      CPU_PID=$!
+
       locust \
         -f locustfile.py \
         --headless \
@@ -81,6 +97,10 @@ for PROFILE in "${PROFILES[@]}"; do
         --only-summary \
         --class-picker "$PROFILE" \
         2>&1 | grep -E "^\[|Aggregated|Exception" || true
+
+      # Para a coleta de CPU
+      kill "$CPU_PID" 2>/dev/null
+      wait "$CPU_PID" 2>/dev/null
 
       # Verifica se o CSV foi gerado corretamente
       if [ -f "$CHECKPOINT_FILE" ] && [ -s "$CHECKPOINT_FILE" ]; then
