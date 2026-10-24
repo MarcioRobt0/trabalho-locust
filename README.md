@@ -5,8 +5,7 @@ Repositório com os testes de carga e avaliação de desempenho do **Spring PetC
 ---
 
 ## Vídeo Demonstrativo
-> **Link do Vídeo:** [COLE O LINK DO YOUTUBE AQUI]  
-> *(Vídeo de 4 a 6 minutos mostrando o PetClinic no Docker, a execução dos testes no Locust, o monitoramento de CPU e os gráficos gerados).*
+> **Link do Vídeo:** [LINK ]
 
 ---
 
