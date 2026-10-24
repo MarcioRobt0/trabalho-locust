@@ -1,0 +1,41 @@
+
+======================================================================
+RESPOSTAS ÀS QUESTÕES DE ANÁLISE (baseadas nos dados coletados)
+======================================================================
+
+1. Como o aumento de usuários afeta o tempo de resposta?
+   [Perfil 1 — Leitura] Leve=57ms → Moderado=1789ms → Elevado=660ms (×11.5 de aumento)
+   [Perfil 2 — Escrita] Leve=1000ms → Moderado=317ms → Elevado=77ms (×0.1 de aumento)
+
+2. Qual perfil apresenta maior vazão?
+   [Perfil 1 — Leitura] Vazão média: 33.17 req/s
+   [Perfil 2 — Escrita] Vazão média: 39.71 req/s
+   → Maior vazão: Perfil 2 — Escrita
+
+3. Quais operações apresentam maior degradação?
+   GET /api/customer/owners/{id}: ×14.42 de degradação
+   POST /api/customer/owners: ×12.61 de degradação
+   GET /api/customer/owners: ×12.20 de degradação
+   GET /api/vet/vets: ×0.67 de degradação
+
+4. Como o consumo de CPU varia entre os cenários?
+   [A — Leve (30)]
+      - customers-service: 182.0%
+      - api-gateway: 3.5%
+      - vets-service: 0.5%
+   [B — Moderado (80)]
+      - customers-service: 208.6%
+      - api-gateway: 6.1%
+      - vets-service: 0.4%
+   [C — Elevado (150)]
+      - customers-service: 109.3%
+      - api-gateway: 15.4%
+      - vets-service: 0.9%
+
+5. Qual cenário apresenta maior taxa de falhas?
+   A — Leve (30): 37.80%
+   B — Moderado (80): 83.47%
+   C — Elevado (150): 87.72%
+   → Maior taxa de falhas: C — Elevado (150)
+
+======================================================================

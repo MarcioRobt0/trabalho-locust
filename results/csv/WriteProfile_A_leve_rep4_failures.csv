@@ -1,0 +1,5 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,POST /api/customer/owners,CatchResponseError('Status inesperado: 503'),1512,2026-10-23T22:44:40Z,2026-10-23T22:51:39Z
+GET,GET /api/vet/vets,CatchResponseError('Status inesperado: 405'),658,2026-10-23T22:44:40Z,2026-10-23T22:51:39Z
+GET,GET /api/customer/owners/{id},CatchResponseError('Status inesperado: 405'),745,2026-10-23T22:44:40Z,2026-10-23T22:51:39Z
+GET,GET /api/customer/owners,CatchResponseError('Status inesperado: 405'),780,2026-10-23T22:44:40Z,2026-10-23T22:51:39Z

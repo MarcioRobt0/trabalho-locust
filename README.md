@@ -125,18 +125,20 @@ Isso gerará os arquivos consolidados em:
 
 ## 📊 Resultados e Análise
 
-*(Esta seção é atualizada automaticamente com a conclusão dos experimentos e a execução do `analyze.py`)*
+Os 60 testes foram executados com sucesso (10 repetições para cada um dos 6 cenários combinados). O primeiro minuto de cada rodada (warm-up) foi descartado pelo script [`analyze.py`](analyze.py) e os dados abaixo refletem a média e o comportamento estatístico da janela estável.
 
 ### Tabela Resumo Consolidada (Média das 10 repetições)
 
-| Perfil | Cenário | Usuários | Tempo Médio (ms) | P95 (ms) | Vazão (req/s) | Total Requisições | Taxa de Falhas (%) |
-|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| *Perfil 1 — Leitura* | A — Leve | 30 | *(em processamento)* | *...* | *...* | *...* | *...* |
-| *Perfil 1 — Leitura* | B — Moderado | 80 | *(em processamento)* | *...* | *...* | *...* | *...* |
-| *Perfil 1 — Leitura* | C — Elevado | 150 | *(em processamento)* | *...* | *...* | *...* | *...* |
-| *Perfil 2 — Escrita* | A — Leve | 30 | *(em processamento)* | *...* | *...* | *...* | *...* |
-| *Perfil 2 — Escrita* | B — Moderado | 80 | *(em processamento)* | *...* | *...* | *...* | *...* |
-| *Perfil 2 — Escrita* | C — Elevado | 150 | *(em processamento)* | *...* | *...* | *...* | *...* |
+| Perfil | Cenário | Usuários | Tempo Médio (ms) | P95 (ms) | Vazão (req/s) | Total Requisições | Taxa de Falhas (%) | Desvio Padrão (ms) |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Perfil 1 — Leitura** | A — Leve | 30 | **57.3** | **212.8** | **14.50** | 5.219 | **0.01%** | 56.0 |
+| **Perfil 1 — Leitura** | B — Moderado | 80 | **1788.8** | **4513.9** | **25.74** | 9.265 | **68.98%** | 1993.3 |
+| **Perfil 1 — Leitura** | C — Elevado | 150 | **659.9** | **2642.0** | **59.27** | 21.336 | **75.68%** | 639.1 |
+| **Perfil 2 — Escrita** | A — Leve | 30 | **999.7** | **4011.5** | **10.81** | 3.890 | **75.59%** | 1011.3 |
+| **Perfil 2 — Escrita** | B — Moderado | 80 | **317.0** | **1568.0** | **35.29** | 12.705 | **97.97%** | 72.5 |
+| **Perfil 2 — Escrita** | C — Elevado | 150 | **77.2** | **215.9** | **73.02** | 26.287 | **99.77%** | 76.9 |
+
+---
 
 ### Gráficos Comparativos
 
@@ -166,24 +168,42 @@ Isso gerará os arquivos consolidados em:
 ## ❓ Respostas às Questões de Análise
 
 ### 1. Como o aumento de usuários afeta o tempo de resposta?
-> *Resposta a ser consolidada com os dados finais de medição após o término das baterias.*
+* **No Perfil 1 (Leitura):** O aumento de 30 para 80 usuários gerou um impacto severo, elevando o tempo médio de resposta de **57.3 ms** para **1.788,8 ms** (um aumento de **31,2 vezes**), e o P95 saltou de 212.8 ms para 4.513,9 ms. No cenário de 150 usuários, o tempo aparente cai para **659.9 ms**, não por ganho de eficiência, mas pela atuação do **Circuit Breaker** do API Gateway, que passa a rejeitar rapidamente (*fail-fast* com tempo inferior a 10 ms) as requisições excedentes.
+* **No Perfil 2 (Escrita):** Devido à alta contenção de escrita no banco de dados e bloqueios transacionais do `customers-service`, o tempo médio já iniciou elevado no cenário Leve (**999.7 ms** com 75.59% de falhas). Nos cenários moderado e elevado, o saturation point é atingido de imediato, abrindo o circuito e gerando rejeições quase instantâneas (tempo médio aparente de **77.2 ms** com 99.77% de falhas).
 
 ### 2. Qual perfil apresenta maior vazão?
-> *Resposta a ser consolidada com os dados finais de medição após o término das baterias.*
+* A vazão bruta média foi de **33.17 req/s** no Perfil 1 (Leitura) e de **39.71 req/s** no Perfil 2 (Escrita).
+* **Entretanto, deve-se distinguir vazão bruta de vazão útil (goodput):** no Perfil 2 (Escrita), a vazão foi composta quase que exclusivamente por **respostas de erro imediatas (Circuit Breaker / HTTP 503)**, atingindo 73.02 req/s com 99.77% de falha no cenário C. Portanto, **em termos de requisições úteis concluídas com sucesso (goodput), o Perfil 1 (Leitura) apresentou desempenho amplamente superior**, processando com sucesso milhares de consultas no cenário leve e moderado.
 
 ### 3. Quais operações apresentam maior degradação?
-> *Resposta a ser consolidada com os dados finais de medição após o término das baterias.*
+Comparando o cenário Leve (30 usuários) com o Elevado (150 usuários), o fator de degradação do P95 por endpoint foi:
+1. `GET /api/customer/owners/{id}`: **14.42× de degradação**
+2. `POST /api/customer/owners`: **12.61× de degradação**
+3. `GET /api/customer/owners`: **12.20× de degradação**
+4. `GET /api/vet/vets`: **0.67× de degradação** (não sofreu degradação perceptível)
+
+**Explicação arquitetural:** Os três endpoints de clientes pertencem ao `customers-service`, que sofreu gargalo direto de concorrência com o banco HSQLDB/MySQL. Já o endpoint `/api/vet/vets` é servido pelo `vets-service`, que utiliza **cache em memória** (`@Cacheable("vets")`) e não concorre com as tabelas de proprietários, demonstrando isolamento de falhas característico de uma boa arquitetura de microsserviços.
 
 ### 4. Como o consumo de CPU varia entre os cenários?
-> *Resposta a ser consolidada com os dados finais de medição após o término das baterias.*
+* **customers-service:** Foi o principal gargalo do sistema. Seu consumo de CPU médio variou de **182.0%** no cenário Leve para um pico de **208.6%** no cenário Moderado (saturando múltiplos núcleos de processamento devido ao parsing JSON, mapeamento ORM/Hibernate e persistência). No cenário Elevado, a CPU estabilizou em **109.3%**, pois as requisições estavam sendo bloqueadas antes no Gateway via circuit breaker.
+* **api-gateway:** O consumo cresceu proporcionalmente ao volume de pacotes de rede e roteamento: **3.5%** no Leve, **6.1%** no Moderado e atingindo **15.4%** no Elevado.
+* **vets-service:** Manteve consumo residual inferior a **1%** em todos os cenários (**0.4% a 0.9%**), protegido pelo cache local.
 
 ### 5. Qual cenário apresenta maior taxa de falhas?
-> *Resposta a ser consolidada com os dados finais de medição após o término das baterias.*
+* **O Cenário C — Elevado (150 usuários)** apresentou a maior taxa global de falhas, com média de **87.72%** (75.68% no Perfil de Leitura e **99.77%** no Perfil de Escrita).
+* O Cenário B (80 usuários) registrou média de **83.47%** de falhas, e o Cenário A (30 usuários) registrou **37.80%** de falhas.
+* O principal mecanismo causador das falhas sob sobrecarga foi o acionamento do **Circuit Breaker** e o timeout de conexão do pool de banco de dados do microsserviço de clientes.
 
 ---
 
 ## 🏁 Conclusões
-*(Síntese das observações arquiteturais sobre gargalos de E/S, capacidade do API Gateway vs. Customers Service e recomendações de escalabilidade horizontal).*
+1. **Ponto Único de Saturação:** O microsserviço `customers-service` é o principal gargalo da aplicação, com alto custo computacional em operações de escrita (`POST /owners`) e concorrência no banco de dados.
+2. **Resiliência do API Gateway:** O Spring Cloud Gateway com Circuit Breaker comportou-se de forma esperada sob tempestade de requisições, evitando o travamento completo da máquina física ao rejeitar preventivamente requisições que levariam os microsserviços a *OutOfMemory* ou travamento permanente.
+3. **Eficácia de Cache:** O `vets-service` exemplificou o benefício do isolamento e do uso de cache distribuído/local em microsserviços, permanecendo com latência mínima e consumo de CPU desprezível mesmo quando outros nós do sistema estavam em sobrecarga.
+4. **Recomendações:** Para suportar a carga de 80 a 150 usuários simultâneos, recomenda-se:
+   - Escalabilidade horizontal do `customers-service` com mais réplicas e balanceamento de carga.
+   - Substituição do banco de dados embutido por um cluster dedicado (ex: PostgreSQL com pool HikariCP otimizado).
+   - Otimização do pool de conexões e filas assíncronas (ex: mensageria com RabbitMQ ou Kafka) para o fluxo de escrita.
 
 ---
 

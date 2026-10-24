@@ -1,0 +1,4 @@
+Perfil,Cenário,Usuários,Tempo Médio (ms),P95 (ms),Vazão (req/s),Total Requisições,Taxa de Falhas (%),Std Tempo Médio (ms)
+Perfil 1 — Leitura,A — Leve (30),30,57.3,212.8,14.5,5219,0.01,56.0
+Perfil 1 — Leitura,B — Moderado (80),80,1788.8,4513.9,25.74,9265,68.98,1993.3
+Perfil 1 — Leitura,C — Elevado (150),150,659.9,2642.0,59.27,21336,75.68,639.1

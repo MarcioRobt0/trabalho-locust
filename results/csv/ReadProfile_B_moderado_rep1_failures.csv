@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,GET /api/customer/owners,CatchResponseError('Status inesperado: 405'),3,2026-10-23T16:20:06Z,2026-10-23T16:24:31Z

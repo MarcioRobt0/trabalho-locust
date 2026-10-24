@@ -1,0 +1,7 @@
+Perfil,Cenário,Usuários,Tempo Médio (ms),P95 (ms),Vazão (req/s),Total Requisições,Taxa de Falhas (%),Std Tempo Médio (ms)
+Perfil 1 — Leitura,A — Leve (30),30,57.3,212.8,14.5,5219,0.01,56.0
+Perfil 1 — Leitura,B — Moderado (80),80,1788.8,4513.9,25.74,9265,68.98,1993.3
+Perfil 1 — Leitura,C — Elevado (150),150,659.9,2642.0,59.27,21336,75.68,639.1
+Perfil 2 — Escrita,A — Leve (30),30,999.7,4011.5,10.81,3890,75.59,1011.3
+Perfil 2 — Escrita,B — Moderado (80),80,317.0,1568.0,35.29,12705,97.97,72.5
+Perfil 2 — Escrita,C — Elevado (150),150,77.2,215.9,73.02,26287,99.77,76.9

@@ -18,6 +18,8 @@ import os
 import glob
 import sys
 import warnings
+import matplotlib
+matplotlib.use("Agg")  # backend não-interativo (sem display)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -125,23 +127,38 @@ def load_per_endpoint_history(profile: str, scenario: str, rep: int) -> pd.DataF
     return df
 
 
+def _get_col(df: pd.DataFrame, candidates: list) -> str | None:
+    """Retorna o primeiro nome de coluna encontrado entre os candidatos."""
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+
 def extract_metrics(df: pd.DataFrame) -> dict:
     """Extrai métricas de um DataFrame de histórico já filtrado."""
     if df is None or df.empty:
         return {}
 
-    rps   = df["Requests/s"].mean()
-    fps   = df["Failures/s"].mean()
-    p50   = df["50%ile (ms)"].mean()
-    p95   = df["95%ile (ms)"].mean()
-    fail  = (fps / rps * 100) if rps > 0 else 0
+    # Suporte a diferentes versões do Locust (nomes de colunas variam)
+    col_p50 = _get_col(df, ["50%ile (ms)", "50%", "Total Median Response Time"])
+    col_p95 = _get_col(df, ["95%ile (ms)", "95%"])
+    col_avg = _get_col(df, ["Total Average Response Time"])
+
+    rps  = df["Requests/s"].mean()
+    fps  = df["Failures/s"].mean()
+    p50  = df[col_p50].mean() if col_p50 else 0
+    p95  = df[col_p95].mean() if col_p95 else 0
+    avg  = df[col_avg].mean() if col_avg else p50   # fallback para mediana
+    fail = (fps / rps * 100) if rps > 0 else 0
     total = rps * MEASURE_SEC
 
     return {
-        "avg_response_ms": p50,           # mediana como proxy da média
-        "p95_ms":          p95,
-        "throughput_rps":  rps,
-        "total_requests":  total,
+        "avg_response_ms":  avg,
+        "p50_ms":           p50,
+        "p95_ms":           p95,
+        "throughput_rps":   rps,
+        "total_requests":   total,
         "failure_rate_pct": fail,
     }
 
@@ -199,30 +216,31 @@ def average_repetitions(df: pd.DataFrame) -> pd.DataFrame:
 
 def load_cpu_data() -> pd.DataFrame | None:
     """Carrega dados de CPU coletados durante os experimentos."""
+    consolidated_file = RESULTS_DIR / "docker_stats_consolidated.csv"
+    if consolidated_file.exists():
+        df = pd.read_csv(consolidated_file)
+        df.columns = df.columns.str.strip()
+        if not df.empty:
+            return df
+
     cpu_files = list(RESULTS_DIR.glob("docker_stats_*.csv"))
     if not cpu_files:
         return None
 
     frames = []
     for f in cpu_files:
+        if f.name == "docker_stats_consolidated.csv":
+            continue
         parts = f.stem.replace("docker_stats_", "").split("_")
-        # Formato: docker_stats_{profile}_{scenario}_rep{i}
-        if len(parts) < 4:
+        if len(parts) < 3:
             continue
-        profile  = parts[0]
-        scenario = "_".join(parts[1:-1])
-        rep_str  = parts[-1].replace("rep", "")
         try:
-            rep = int(rep_str)
-        except ValueError:
+            df = pd.read_csv(f)
+            df.columns = df.columns.str.strip()
+            if not df.empty:
+                frames.append(df)
+        except Exception:
             continue
-
-        df = pd.read_csv(f)
-        df.columns = df.columns.str.strip()
-        df["profile"]  = profile
-        df["scenario"] = scenario
-        df["rep"]      = rep
-        frames.append(df)
 
     if not frames:
         return None
@@ -444,9 +462,10 @@ def chart_endpoint_degradation(raw_df: pd.DataFrame):
                     continue
                 for ep_name in df_ep["Name"].unique():
                     ep_df = df_ep[df_ep["Name"] == ep_name]
+                    col_p95 = _get_col(ep_df, ["95%ile (ms)", "95%"])
                     rows.append({
                         "endpoint": ep_name,
-                        "p95":      ep_df["95%ile (ms)"].mean(),
+                        "p95":      ep_df[col_p95].mean() if col_p95 else 0,
                         "rep":      rep,
                     })
             if rows:
@@ -494,14 +513,17 @@ def chart_cpu_usage(cpu_df: pd.DataFrame):
     cpu_col  = cpu_col[0]
     name_col = name_col[0]
 
-    # Limpa o símbolo % se presente
+    # Garante conversão para float
     cpu_df[cpu_col] = cpu_df[cpu_col].astype(str).str.replace("%", "").astype(float)
 
-    services = cpu_df[name_col].unique()[:4]  # top 4 serviços
+    services = [s for s in ["customers-service", "api-gateway", "vets-service", "visits-service"] if s in cpu_df[name_col].values]
+    if not services:
+        services = list(cpu_df[name_col].unique()[:4])
+
     scenarios = list(SCENARIOS.keys())
 
-    fig, axes = plt.subplots(1, len(PROFILES), figsize=(16, 6), sharey=False)
-    fig.suptitle("Utilização de CPU por Serviço e Cenário", fontsize=14, fontweight="bold")
+    fig, axes = plt.subplots(1, len(PROFILES), figsize=(16, 6), sharey=True)
+    fig.suptitle("Utilização Média de CPU (%) por Microsserviço e Cenário", fontsize=14, fontweight="bold")
 
     for ax, (profile, label) in zip(axes, PROFILES.items()):
         sub = cpu_df[cpu_df["profile"] == profile]
@@ -510,7 +532,7 @@ def chart_cpu_usage(cpu_df: pd.DataFrame):
 
         for i, svc in enumerate(services):
             svc_sub = sub[sub[name_col] == svc]
-            means = [svc_sub[svc_sub["scenario"] == s][cpu_col].mean() for s in scenarios]
+            means = [svc_sub[svc_sub["scenario"] == s][cpu_col].mean() if not svc_sub[svc_sub["scenario"] == s].empty else 0 for s in scenarios]
             offset = (i - len(services) / 2 + 0.5) * w
             ax.bar(x + offset, means, w, label=svc, alpha=0.85)
 
@@ -570,8 +592,10 @@ def answer_questions(raw_df: pd.DataFrame, cpu_df: pd.DataFrame | None):
             if leve is None or elev is None:
                 continue
             for ep in leve["Name"].unique():
-                p95_l = leve[leve["Name"] == ep]["95%ile (ms)"].mean()
-                p95_e = elev[elev["Name"] == ep]["95%ile (ms)"].mean() if ep in elev["Name"].values else 0
+                col_p95_l = _get_col(leve[leve["Name"] == ep], ["95%ile (ms)", "95%"])
+                col_p95_e = _get_col(elev[elev["Name"] == ep], ["95%ile (ms)", "95%"]) if ep in elev["Name"].values else None
+                p95_l = leve[leve["Name"] == ep][col_p95_l].mean() if col_p95_l else 0
+                p95_e = elev[elev["Name"] == ep][col_p95_e].mean() if (col_p95_e and ep in elev["Name"].values) else 0
                 if p95_l > 0 and ep not in degradations:
                     degradations[ep] = p95_e / p95_l
 
@@ -584,11 +608,18 @@ def answer_questions(raw_df: pd.DataFrame, cpu_df: pd.DataFrame | None):
     # Q4: Como o consumo de CPU varia entre os cenários?
     output.append("\n4. Como o consumo de CPU varia entre os cenários?")
     if cpu_df is not None and not cpu_df.empty:
-        cpu_col  = [c for c in cpu_df.columns if "cpu" in c.lower()][0]
-        cpu_df[cpu_col] = cpu_df[cpu_col].astype(str).str.replace("%", "").astype(float)
+        cpu_col = [c for c in cpu_df.columns if "cpu" in c.lower()][0]
+        name_col = [c for c in cpu_df.columns if "name" in c.lower()][0]
+        if cpu_df[cpu_col].dtype == object:
+            cpu_df[cpu_col] = cpu_df[cpu_col].astype(str).str.replace("%", "").astype(float)
         for s in scenarios:
-            mean_cpu = cpu_df[cpu_df["scenario"] == s][cpu_col].mean()
-            output.append(f"   {SCENARIO_LABELS[s]}: CPU média = {mean_cpu:.1f}%")
+            sub_s = cpu_df[cpu_df["scenario"] == s]
+            if not sub_s.empty:
+                output.append(f"   [{SCENARIO_LABELS[s]}]")
+                for svc in ["customers-service", "api-gateway", "vets-service"]:
+                    sub_svc = sub_s[sub_s[name_col] == svc]
+                    if not sub_svc.empty:
+                        output.append(f"      - {svc}: {sub_svc[cpu_col].mean():.1f}%")
     else:
         output.append("   (dados de CPU não disponíveis — verifique results/csv/docker_stats_*.csv)")
 
