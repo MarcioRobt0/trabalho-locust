@@ -15,8 +15,8 @@ Os testes foram rodados localmente com as seguintes configurações:
 
 | Item | Descrição |
 |---|---|
-| **Sistema Operacional** | Ubuntu 24.04.5 LTS (Kernel Linux 7.0.0-38-generic) |
-| **Processador** | 12th Gen Intel Core i5-1235U (10 núcleos, 12 threads) |
+| **Sistema Operacional** | Ubuntu 24.04.5 LTS |
+| **Processador** | 12th Gen Intel Core i5-1235U |
 | **Memória RAM** | 16 GB |
 | **Docker** | Versão 29.9.1 |
 | **Docker Compose** | Versão v5.6.0 |
